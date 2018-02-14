@@ -39,6 +39,18 @@ func UserHandler(w http.ResponseWriter, r *http.Request) {
 func BudgetHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
+		d, err := strconv.Atoi(r.URL.Path[15:])
+		if err != nil {
+			log.Print(err)
+		}
+		budgets := GetBudgets(uint64(d))
+		for _, b := range budgets {
+			obj, err := json.Marshal(b)
+			if err != nil {
+				log.Fatal(err)
+			}
+			fmt.Fprintf(w, fmt.Sprintln(string(obj[:])))
+		}
 	case "POST":
 	default:
 		http.Error(w, fmt.Sprintf("%v is not allowed at this path", r.Method), http.StatusMethodNotAllowed)
@@ -47,5 +59,6 @@ func BudgetHandler(w http.ResponseWriter, r *http.Request) {
 
 func StartServer() {
 	http.HandleFunc(baseURL+"/user/", UserHandler)
+	http.HandleFunc(baseURL+"/budget/", BudgetHandler)
 	http.ListenAndServe(":8080", nil)
 }

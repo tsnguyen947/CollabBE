@@ -26,7 +26,7 @@ func GeneralGet(table string, args map[string]string) interface{} {
 		conditions.WriteString("=" + v + " AND")
 	}
 	conditions.Truncate(conditions.Len() - 3)
-	rows, err := db.Query(fmt.Sprintf("SELECT * FROM %s where%s", table, conditions.String()))
+	rows, err := db.Query(fmt.Sprintf("SELECT * FROM %s WHERE%s", table, conditions.String()))
 	if err != nil {
 		log.Print(err)
 	}
@@ -36,6 +36,7 @@ func GeneralGet(table string, args map[string]string) interface{} {
 	case "users":
 		result = populateUsers(rows)
 	case "budgets":
+		result = populateBudgets(rows)
 	}
 	return result
 }
@@ -49,6 +50,19 @@ func populateUsers(rows *sql.Rows) []*User {
 			log.Print(err)
 		}
 		result = append(result, user)
+	}
+	return result
+}
+
+func populateBudgets(rows *sql.Rows) []*Budget {
+	result := make([]*Budget, 0)
+	for rows.Next() {
+		budget := new(Budget)
+		err := rows.Scan(&budget.Id, &budget.UserId, &budget.Other)
+		if err != nil {
+			log.Print(err)
+		}
+		result = append(result, budget)
 	}
 	return result
 }
@@ -68,7 +82,9 @@ func WriteUser(id uint64, username string, rent uint64, wealth uint64) {
 	}
 }
 
-// func GetBudgets(userID uint64)
+func GetBudgets(userID uint64) []*Budget {
+	return GeneralGet("budgets", map[string]string{"user_id": fmt.Sprintf("%v", userID)}).([]*Budget)
+}
 
 func WriteBook(isbn string, title string, author string, price float32) {
 	db.Exec("INSERT INTO books VALUES ($1, $2, $3, $4)", isbn, title, author, price)

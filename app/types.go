@@ -13,3 +13,9 @@ type User struct {
 	Rent     uint64
 	Wealth   uint64
 }
+
+type Budget struct {
+	Id     uint64
+	UserId uint64
+	Other  string
+}
