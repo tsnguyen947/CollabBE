@@ -1,7 +1,6 @@
 package app
 
 import (
-	"bytes"
 	"database/sql"
 	"fmt"
 	"log"
@@ -19,73 +18,54 @@ func init() {
 	}
 }
 
-func GeneralGet(table string, args map[string]string) interface{} {
-	conditions := bytes.NewBufferString("")
-	for k, v := range args {
-		conditions.WriteString(" " + k)
-		conditions.WriteString("=" + v + " AND")
+func GetUserByID(id uint64) (*User, error) {
+	rows, err := db.Query(fmt.Sprintf("SELECT * FROM users WHERE id IS %v", id))
+	if err != nil {
+		return nil, err
 	}
-	conditions.Truncate(conditions.Len() - 3)
-	rows, err := db.Query(fmt.Sprintf("SELECT * FROM %s WHERE%s", table, conditions.String()))
+	user := new(User)
+	rows.Next()
+	err = rows.Scan(&user.Id, &user.Username, &user.Rent, &user.Wealth, &user.EncryptedPass)
+	if err != nil {
+		return nil, err
+	}
+	return user, nil
+}
+
+func GetUserByUsername(name string) (*User, error) {
+	rows, err := db.Query(fmt.Sprintf("SELECT * FROM users WHERE username='%s'", name))
+	if err != nil {
+		return nil, err
+	}
+	user := new(User)
+	rows.Next()
+	err = rows.Scan(&user.Id, &user.Username, &user.Rent, &user.Wealth, &user.EncryptedPass)
+	if err != nil {
+		return nil, err
+	}
+	return user, nil
+}
+
+func WriteUser(id uint64, username string, rent uint64, wealth uint64, encryptedPass string) {
+	_, err := db.Exec("INSERT INTO users VALUES ($1, $2, $3, $4, $5)", id, username, rent, wealth, encryptedPass)
 	if err != nil {
 		log.Print(err)
 	}
-	defer rows.Close()
-	var result interface{}
-	switch table {
-	case "users":
-		result = populateUsers(rows)
-	case "budgets":
-		result = populateBudgets(rows)
-	}
-	return result
 }
 
-func populateUsers(rows *sql.Rows) []*User {
-	result := make([]*User, 0)
-	for rows.Next() {
-		user := new(User)
-		err := rows.Scan(&user.Id, &user.Username, &user.Rent, &user.Wealth)
-		if err != nil {
-			log.Print(err)
-		}
-		result = append(result, user)
+func GetUserBudgets(userID uint64) ([]*Budget, error) {
+	rows, err := db.Query(fmt.Sprintf("SELECT * FROM budgets WHERE userId IS %v", userID))
+	if err != nil {
+		return nil, err
 	}
-	return result
-}
-
-func populateBudgets(rows *sql.Rows) []*Budget {
-	result := make([]*Budget, 0)
+	budgets := make([]*Budget, 5)
 	for rows.Next() {
 		budget := new(Budget)
-		err := rows.Scan(&budget.Id, &budget.UserId, &budget.Other)
+		err = rows.Scan(&budget.Id, &budget.UserId, &budget.Other)
 		if err != nil {
-			log.Print(err)
+			return nil, err
 		}
-		result = append(result, budget)
+		budgets = append(budgets, budget)
 	}
-	return result
-}
-
-func GetUserByID(id uint64) *User {
-	return GetUser(map[string]string{"id": fmt.Sprintf("%v", id)})[0]
-}
-
-func GetUser(args map[string]string) []*User {
-	return GeneralGet("users", args).([]*User)
-}
-
-func WriteUser(id uint64, username string, rent uint64, wealth uint64) {
-	_, err := db.Exec("INSERT INTO users VALUES ($1, $2, $3, $4)", id, username, rent, wealth)
-	if err != nil {
-		log.Print(err)
-	}
-}
-
-func GetBudgets(userID uint64) []*Budget {
-	return GeneralGet("budgets", map[string]string{"user_id": fmt.Sprintf("%v", userID)}).([]*Budget)
-}
-
-func WriteBook(isbn string, title string, author string, price float32) {
-	db.Exec("INSERT INTO books VALUES ($1, $2, $3, $4)", isbn, title, author, price)
+	return budgets, nil
 }
