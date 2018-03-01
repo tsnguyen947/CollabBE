@@ -100,8 +100,9 @@ func BudgetHandler(w http.ResponseWriter, r *http.Request) {
 		if err := decoder.Decode(&budget); err != nil {
 			log.Print(err)
 			http.Error(w, "Error in creating budget", http.StatusInternalServerError)
+		} else {
+			CreateBudget(budget.UserId, budget.Income, budget.Rent, budget.Wealth)
 		}
-		CreateBudget(budget.UserId, budget.Income, budget.Rent, budget.Wealth)
 	default:
 		http.Error(w, fmt.Sprintf("%v is not allowed at this path", r.Method), http.StatusMethodNotAllowed)
 	}
@@ -138,7 +139,10 @@ func VerifyUserHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
 		email := r.URL.Path[15:]
-		VerifyUser(email)
+		if err := VerifyUser(email); err != nil {
+			log.Print(err)
+			http.Error(w, "Error in verifying email", http.StatusInternalServerError)
+		}
 	default:
 		http.Error(w, fmt.Sprintf("%v is not allowed at this path", r.Method), http.StatusMethodNotAllowed)
 	}

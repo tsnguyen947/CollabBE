@@ -13,21 +13,21 @@ var db *sql.DB = nil
 
 func init() {
 	var err error = nil
-	db, err = sql.Open("postgres", "user=samnguyen dbname=pqgotest sslmode=require")
-	if err != nil {
+	if db, err = sql.Open("postgres", "user=samnguyen dbname=pqgotest sslmode=require"); err != nil {
 		log.Fatal(err)
 	}
 }
 
 func GetUserByAttribute(att string, val string) *User {
-	rows, err := db.Query(fmt.Sprintf("SELECT * FROM users WHERE %s=%s", att, val))
-	if err != nil {
+	var rows *sql.Rows
+	var err error
+	if rows, err = db.Query(fmt.Sprintf("SELECT * FROM users WHERE %s=%s", att, val)); err != nil {
 		panic(err)
 	}
 	user := new(User)
 	exists := rows.Next()
 	if exists {
-		if err = rows.Scan(&user.Id, &user.Username, &user.Email, &user.EncryptedPass, &user.LastAccess, &user.Verified); err != nil {
+		if err := rows.Scan(&user.Id, &user.Username, &user.Email, &user.EncryptedPass, &user.LastAccess, &user.Verified); err != nil {
 			panic(err)
 		}
 		return user
@@ -48,8 +48,8 @@ func GetUserByUsername(username string) *User {
 	return GetUserByAttribute("username", fmt.Sprintf("'%s'", username))
 }
 
-func WriteUser(id uint64, email string, encryptedPass string) {
-	if _, err := db.Exec("INSERT INTO users VALUES ($1, $2, $3, $4, $5, $6)", id, email, email, encryptedPass, time.Now(), false); err != nil {
+func WriteUser(email string, encryptedPass string) {
+	if _, err := db.Exec("INSERT INTO users VALUES ($1, $2, $3, $4, $5)", email, email, encryptedPass, time.Now(), false); err != nil {
 		panic(err)
 	}
 }
@@ -84,7 +84,7 @@ func GetUserBudgets(userID uint64) []*Budget {
 }
 
 func WriteBudget(userID uint64, income uint64, rent uint64, wealth int64) {
-	if _, err := db.Exec("INSERT INTO budgets VALUES ($1, $2, $3, $4, $5)", 0, userID, income, rent, wealth); err != nil {
+	if _, err := db.Exec("INSERT INTO budgets VALUES ($1, $2, $3, $4)", userID, income, rent, wealth); err != nil {
 		panic(err)
 	}
 }

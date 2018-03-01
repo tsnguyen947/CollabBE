@@ -28,7 +28,7 @@ func CreateUser(email string, password string) error {
 		if hashedPassword, err = bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost); err != nil {
 			return err
 		}
-		WriteUser(0, email, string(hashedPassword))
+		WriteUser(email, string(hashedPassword))
 		return nil
 	} else {
 		return errors.New(fmt.Sprintf("User with email %s already exists", email))
@@ -91,7 +91,11 @@ func Login(username string, password string) error {
 	return status
 }
 
-func VerifyUser(email string) {
+func VerifyUser(email string) error {
 	user := GetUserByEmail(email)
-	UpdateUser(user.Id, user.Username, email, user.EncryptedPass, true, time.Now())
+	if user != nil {
+		UpdateUser(user.Id, user.Username, email, user.EncryptedPass, true, time.Now())
+	} else {
+		return errors.New("Email given is not a valid email")
+	}
 }
