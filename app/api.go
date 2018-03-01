@@ -95,6 +95,7 @@ func VerifyUser(email string) error {
 	user := GetUserByEmail(email)
 	if user != nil {
 		UpdateUser(user.Id, user.Username, email, user.EncryptedPass, true, time.Now())
+		return nil
 	} else {
 		return errors.New("Email given is not a valid email")
 	}
