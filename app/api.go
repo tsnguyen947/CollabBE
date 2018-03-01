@@ -2,108 +2,96 @@ package app
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
-	"log"
-	"net/http"
-	"strconv"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 )
 
-var baseURL = "/api/v1"
+func GetUser(userId int) (*string, error) {
+	user := GetUserByID(uint64(userId))
+	var obj []byte
+	var err error
+	if obj, err = json.Marshal(*user); err != nil {
+		return nil, err
+	}
+	result := string(obj[:])
+	return &result, nil
+}
 
-func UserHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case "GET":
-		d, err := strconv.Atoi(r.URL.Path[13:])
-		if err != nil {
-			log.Print(err)
+func CreateUser(email string, password string) error {
+	user := GetUserByEmail(email)
+	if user == nil {
+		var hashedPassword []byte
+		var err error
+		if hashedPassword, err = bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost); err != nil {
+			return err
 		}
-		user, err := GetUserByID(uint64(d))
-		obj, err := json.Marshal(*user)
-		if err != nil {
-			log.Fatal(err)
-		}
-		fmt.Fprintf(w, string(obj[:]))
-	case "PUT":
-		decoder := json.NewDecoder(r.Body)
-		var data struct {
-			Id       uint64
-			Username string
-			Rent     uint64
-			Wealth   uint64
-			Password string
-		}
-		err := decoder.Decode(&data)
-		if err != nil {
-			panic(err)
-		}
-		user, err := GetUserByUsername(data.Username)
-		if user == nil {
-			hashedPassword, err := bcrypt.GenerateFromPassword([]byte(data.Password), bcrypt.DefaultCost)
-			if err != nil {
-				panic(err)
-			}
-			WriteUser(data.Id, data.Username, data.Rent, data.Wealth, string(hashedPassword))
-		} else {
-			http.Error(w, fmt.Sprintf("Username %s is already taken", data.Username), http.StatusBadRequest)
-		}
-	default:
-		http.Error(w, fmt.Sprintf("%v is not allowed at this path", r.Method), http.StatusMethodNotAllowed)
+		WriteUser(0, email, string(hashedPassword))
+		return nil
+	} else {
+		return errors.New(fmt.Sprintf("User with email %s already exists", email))
 	}
 }
 
-func BudgetHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case "GET":
-		d, err := strconv.Atoi(r.URL.Path[15:])
-		if err != nil {
-			log.Print(err)
+func EditUser(id uint64, username string, email string, oldPass string, newPass string, verified bool) error {
+	user := GetUserByID(id)
+	fmt.Println(user)
+	if err := bcrypt.CompareHashAndPassword([]byte(user.EncryptedPass), []byte(oldPass)); err != nil {
+		return err
+	}
+	if newPass == "" {
+		UpdateUser(id, username, email, user.EncryptedPass, verified, time.Time{})
+	} else {
+		var hashedPassword []byte
+		var err error
+		if hashedPassword, err = bcrypt.GenerateFromPassword([]byte(newPass), bcrypt.DefaultCost); err != nil {
+			return err
 		}
-		budgets, err := GetUserBudgets(uint64(d))
-		for _, b := range budgets {
-			obj, err := json.Marshal(b)
-			if err != nil {
-				log.Fatal(err)
-			}
-			fmt.Fprintf(w, fmt.Sprintln(string(obj[:])))
+		UpdateUser(id, username, email, string(hashedPassword), verified, time.Time{})
+	}
+	return nil
+}
+
+func GetBudgets(id uint64) ([]string, error) {
+	budgets := GetUserBudgets(id)
+	var result []string
+	for _, b := range budgets {
+		var obj []byte
+		var err error
+		if obj, err = json.Marshal(b); err != nil {
+			return nil, err
 		}
-	case "PUT":
-	default:
-		http.Error(w, fmt.Sprintf("%v is not allowed at this path", r.Method), http.StatusMethodNotAllowed)
+		result = append(result, string(obj))
+	}
+	return result, nil
+}
+
+func CreateBudget(userID uint64, income uint64, rent uint64, wealth int64) error {
+	user := GetUserByID(userID)
+	if user != nil {
+		WriteBudget(userID, income, rent, wealth)
+		return nil
+	} else {
+		return errors.New("Cannot create a budget for a nonexistent user")
 	}
 }
 
-func LoginHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case "POST":
-		decoder := json.NewDecoder(r.Body)
-		var cred struct {
-			Username string
-			Password string
+func Login(username string, password string) error {
+	user := GetUserByUsername(username)
+	var status error = nil
+	if user != nil || !user.Verified {
+		if err := bcrypt.CompareHashAndPassword([]byte(user.EncryptedPass), []byte(password)); err != nil {
+			status = errors.New("Username or password is invalid")
 		}
-		err := decoder.Decode(&cred)
-		if err != nil {
-			log.Print(err)
-			http.Error(w, fmt.Sprint("Parameters accepted are 'username' and 'password'"), http.StatusBadRequest)
-		}
-		user, err := GetUserByUsername(cred.Username)
-		if err == nil {
-			err = bcrypt.CompareHashAndPassword([]byte(user.EncryptedPass), []byte(cred.Password))
-		}
-		if err != nil {
-			log.Print(err)
-			http.Error(w, fmt.Sprint("Username or password is invalid"), http.StatusBadRequest)
-		}
+	} else {
+		status = errors.New("Username or password is invalid, or email is not verified")
 	}
+	return status
 }
 
-func StartServer() {
-	http.HandleFunc(baseURL+"/user/", UserHandler)
-	http.HandleFunc(baseURL+"/budget/", BudgetHandler)
-	http.HandleFunc(baseURL+"/login/", LoginHandler)
-	err := http.ListenAndServe(":8080", nil)
-	if err != nil {
-		log.Print(err)
-	}
+func VerifyUser(email string) {
+	user := GetUserByEmail(email)
+	UpdateUser(user.Id, user.Username, email, user.EncryptedPass, true, time.Now())
 }

@@ -1,15 +1,22 @@
 package app
 
+import (
+	"time"
+)
+
 type User struct {
 	Id            uint64
 	Username      string
-	Rent          uint64
-	Wealth        uint64
+	Email         string
 	EncryptedPass string
+	LastAccess    time.Time
+	Verified      bool
 }
 
 type Budget struct {
 	Id     uint64
 	UserId uint64
-	Other  string
+	Income uint64
+	Rent   uint64
+	Wealth uint64
 }
