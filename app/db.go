@@ -2,6 +2,7 @@ package app
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -56,6 +57,9 @@ func GetUserByUsername(username string) *User {
 }
 
 func WriteUser(email string, encryptedPass string) {
+	if email == "" || encryptedPass == "" {
+		panic(errors.New("Cannot have an empty email or password"))
+	}
 	if _, err := DB.Exec("INSERT INTO users VALUES (DEFAULT, $1, $2, $3, $4, $5)", email, email, encryptedPass, time.Now(), false); err != nil {
 		panic(err)
 	}
@@ -76,10 +80,13 @@ func UpdateUser(id uint64, username string, email string, encryptedPass string, 
 func GetUserBudgets(userID uint64) []*Budget {
 	var rows *sql.Rows
 	var err error
-	if rows, err = DB.Query(fmt.Sprintf("SELECT * FROM budgets WHERE userId IS %v", userID)); err != nil {
+	if user := GetUserByID(userID); user == nil {
+		panic(errors.New("Attempted to access budgets of a nonexistent user"))
+	}
+	if rows, err = DB.Query(fmt.Sprintf("SELECT * FROM budgets WHERE userId=%v", userID)); err != nil {
 		panic(err)
 	}
-	budgets := make([]*Budget, 5)
+	var budgets []*Budget
 	for rows.Next() {
 		budget := new(Budget)
 		if err := rows.Scan(&budget.Id, &budget.UserId, &budget.Income, &budget.Rent, &budget.Wealth); err != nil {
@@ -91,6 +98,9 @@ func GetUserBudgets(userID uint64) []*Budget {
 }
 
 func WriteBudget(userID uint64, income uint64, rent uint64, wealth int64) {
+	if user := GetUserByID(userID); user == nil {
+		panic(errors.New("Attempted to create a budget for a nonexistent user"))
+	}
 	if _, err := DB.Exec("INSERT INTO budgets VALUES (DEFAULT, $1, $2, $3, $4)", userID, income, rent, wealth); err != nil {
 		panic(err)
 	}
