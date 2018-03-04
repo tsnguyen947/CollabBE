@@ -37,7 +37,6 @@ func CreateUser(email string, password string) error {
 
 func EditUser(id uint64, username string, email string, oldPass string, newPass string, verified bool) error {
 	user := GetUserByID(id)
-	fmt.Println(user)
 	if err := bcrypt.CompareHashAndPassword([]byte(user.EncryptedPass), []byte(oldPass)); err != nil {
 		return err
 	}
@@ -78,19 +77,6 @@ func CreateBudget(userID uint64, income uint64, rent uint64, wealth int64) error
 	}
 }
 
-func Login(username string, password string) error {
-	user := GetUserByUsername(username)
-	var status error = nil
-	if user != nil || !user.Verified {
-		if err := bcrypt.CompareHashAndPassword([]byte(user.EncryptedPass), []byte(password)); err != nil {
-			status = errors.New("Username or password is invalid")
-		}
-	} else {
-		status = errors.New("Username or password is invalid, or email is not verified")
-	}
-	return status
-}
-
 func VerifyUser(email string) error {
 	user := GetUserByEmail(email)
 	if user != nil {
@@ -99,4 +85,17 @@ func VerifyUser(email string) error {
 	} else {
 		return errors.New("Email given is not a valid email")
 	}
+}
+
+func Login(username string, password string) error {
+	user := GetUserByUsername(username)
+	var status error = nil
+	if user != nil && user.Verified {
+		if err := bcrypt.CompareHashAndPassword([]byte(user.EncryptedPass), []byte(password)); err != nil {
+			status = errors.New("Username or password is invalid")
+		}
+	} else {
+		status = errors.New("Username or password is invalid, or email is not verified")
+	}
+	return status
 }

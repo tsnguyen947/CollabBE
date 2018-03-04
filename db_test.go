@@ -11,7 +11,8 @@ import (
 
 func init() {
 	app.SwitchToTest()
-	app.DB.Exec("SELECT setval('users_id_seq', 1)")
+	app.DB.Exec("SELECT setval('users_id_seq', 100)")
+	app.DB.Exec("SELECT setval('budgets_id_seq', 100)")
 	DBTeardown()
 }
 
@@ -24,18 +25,21 @@ func checkPanics(t *testing.T) {
 func DBSetup(t *testing.T) {
 	defer checkPanics(t)
 	DBTeardown()
+	for n := uint64(0); n < 10; n++ {
+		app.DB.Exec("INSERT INTO users VALUES($1, $2, $3, $4, $5, false)", n, fmt.Sprintf("user%v", n), fmt.Sprintf("email%v@test.com", n), fmt.Sprintf("supersecretpass%v", n), time.Time{})
+		app.DB.Exec("INSERT INTO budgets VALUES($1, $2, $3, $4, $5)", n, (n / 5), n, n, n)
+	}
 }
 
 func DBTeardown() {
-	app.DB.Exec("DELETE FROM users")
 	app.DB.Exec("DELETE FROM budgets")
+	app.DB.Exec("DELETE FROM users")
 }
 
 func TestUserGet(t *testing.T) {
 	DBSetup(t)
 	for n := uint64(0); n < 10; n++ {
-		app.DB.Exec("INSERT INTO users VALUES($1, $2, $3, $4, $5, true)", n, fmt.Sprintf("user%v", n), fmt.Sprintf("email%v@test.com", n), fmt.Sprintf("supersecretpass%v", n), time.Time{})
-		compare := app.User{Id: n, Username: fmt.Sprintf("user%v", n), Email: fmt.Sprintf("email%v@test.com", n), EncryptedPass: fmt.Sprintf("supersecretpass%v", n), LastAccess: time.Time{}, Verified: true}
+		compare := app.User{Id: n, Username: fmt.Sprintf("user%v", n), Email: fmt.Sprintf("email%v@test.com", n), EncryptedPass: fmt.Sprintf("supersecretpass%v", n), LastAccess: time.Time{}, Verified: false}
 		idUser := app.GetUserByID(n)
 		emailUser := app.GetUserByEmail(fmt.Sprintf("email%v@test.com", n))
 		usernameUser := app.GetUserByUsername(fmt.Sprintf("user%v", n))
@@ -43,7 +47,6 @@ func TestUserGet(t *testing.T) {
 			t.Errorf("User does not match expected")
 		}
 	}
-	DBTeardown()
 }
 
 func TestNilUserGet(t *testing.T) {
@@ -61,7 +64,6 @@ func TestNilUserGet(t *testing.T) {
 	if len(reason) != 0 {
 		t.Errorf("Issue in getting nonexistent users by %s", strings.Join(reason, " and "))
 	}
-	DBTeardown()
 }
 
 func TestUserWrite(t *testing.T) {
@@ -76,11 +78,10 @@ func TestUserWrite(t *testing.T) {
 		var n int
 		rows.Next()
 		rows.Scan(&n)
-		if n != 10 {
-			t.Errorf("Expected 10 got %v", n)
+		if n != 20 {
+			t.Errorf("Expected 20 users got %v", n)
 		}
 	}
-	DBTeardown()
 }
 
 func TestEmptyUserWrite(t *testing.T) {
@@ -91,7 +92,6 @@ func TestEmptyUserWrite(t *testing.T) {
 		}
 	}()
 	app.WriteUser("", "")
-	DBTeardown()
 }
 
 func TestUpdateUser(t *testing.T) {
@@ -99,7 +99,6 @@ func TestUpdateUser(t *testing.T) {
 	var n uint64 = 1
 	var user, newUser app.User
 	now := time.Now().UTC()
-	app.DB.Exec("INSERT INTO users VALUES($1, $2, $3, $4, $5, false)", n, fmt.Sprintf("user%v", n), fmt.Sprintf("email%v@test.com", n), fmt.Sprintf("supersecretpass%v", n), time.Time{})
 	rows, _ := app.DB.Query("SELECT * FROM users WHERE id=$1", n)
 	rows.Next()
 	rows.Scan(&user.Id, &user.Username, &user.Email, &user.EncryptedPass, &user.LastAccess, &user.Verified)
@@ -116,75 +115,60 @@ func TestUpdateUser(t *testing.T) {
 	if newUser != compare {
 		t.Errorf("Error in validating user after update")
 	}
-	DBTeardown()
 }
 
-func TestGetBudgets(t *testing.T) {
+func TestGetUserBudgets(t *testing.T) {
 	DBSetup(t)
-	app.DB.Exec("INSERT INTO users VALUES($1, $2, $3, $4, $5, true)", 1, "user", "email@test.com", "supersecretpass", time.Time{})
-	for n := uint64(0); n < 10; n++ {
-		app.DB.Exec("INSERT INTO budgets VALUES($1, $2, $3, $4, $5)", n, 1, n, n, n)
-	}
-	budgets := app.GetUserBudgets(1)
-	if len(budgets) != 10 {
-		t.Errorf(fmt.Sprintf("Expected 10 rows got %v", len(budgets)))
+	budgets := app.GetUserBudgets(0)
+	if len(budgets) != 5 {
+		t.Errorf(fmt.Sprintf("Expected 5 budgets got %v", len(budgets)))
 	}
 	for n, budget := range budgets {
-		compare := app.Budget{Id: uint64(n), UserId: 1, Income: uint64(n), Rent: uint64(n), Wealth: uint64(n)}
+		compare := app.Budget{Id: uint64(n), UserId: 0, Income: uint64(n), Rent: uint64(n), Wealth: uint64(n)}
 		if compare != *budget {
 			t.Errorf("Budget does not match expected: %v vs %v", budget, compare)
 		}
 	}
-	DBTeardown()
 }
 
-func TestGetBudgetsNilUser(t *testing.T) {
+func TestGetUserBudgetsNilUser(t *testing.T) {
 	DBSetup(t)
 	defer func() {
 		if err := recover(); err == nil {
-			t.Error("Expected panic but got none")
+			t.Error("Expected panic while getting budgets for nonexistent user")
 		}
 	}()
-	for n := uint64(0); n < 10; n++ {
-		app.DB.Exec("INSERT INTO budgets VALUES($1, $2, $3, $4, $5)", n, 1, n, n, n)
-	}
-	app.GetUserBudgets(1)
-	DBTeardown()
+	app.GetUserBudgets(50)
 }
 
-func TestGetEmptyBudgets(t *testing.T) {
+func TestGetEmptyUserBudgets(t *testing.T) {
 	DBSetup(t)
-	app.DB.Exec("INSERT INTO users VALUES($1, $2, $3, $4, $5, true)", 1, "user", "email@test.com", "supersecretpass", time.Time{})
-	budgets := app.GetUserBudgets(1)
+	budgets := app.GetUserBudgets(5)
 	if len(budgets) != 0 {
 		t.Errorf("Expected empty budget list but got one with %v elements", len(budgets))
 	}
-	DBTeardown()
 }
 
-func TestCreateBudget(t *testing.T) {
+func TestWriteBudget(t *testing.T) {
 	DBSetup(t)
-	app.DB.Exec("INSERT INTO users VALUES($1, $2, $3, $4, $5, true)", 1, "user", "email@test.com", "supersecretpass", time.Time{})
 	for n := 0; n < 10; n++ {
-		app.WriteBudget(1, uint64(n), uint64(n), int64(n))
+		app.WriteBudget(7, uint64(n), uint64(n), int64(n))
 	}
 	rows, _ := app.DB.Query("SELECT count(*) FROM budgets")
 	var n int
 	rows.Next()
 	rows.Scan(&n)
-	if n != 10 {
-		t.Errorf("Expected 10 got %v", n)
+	if n != 20 {
+		t.Errorf("Expected 20 budgets got %v", n)
 	}
-	DBTeardown()
 }
 
-func TestCreateBudgetNilUser(t *testing.T) {
+func TestWriteBudgetNilUser(t *testing.T) {
 	DBSetup(t)
 	defer func() {
 		if err := recover(); err == nil {
-			t.Error("Expected panic but got none")
+			t.Error("Expected panic while creating budget for nonexistent user")
 		}
 	}()
-	app.WriteBudget(1, 10000, 10000, 10000)
-	DBTeardown()
+	app.WriteBudget(50, 10000, 10000, 10000)
 }
