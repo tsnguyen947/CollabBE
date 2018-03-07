@@ -132,6 +132,25 @@ func TestCreateBudgetNilUser(t *testing.T) {
 	}
 }
 
+func TestEditBudget(t *testing.T) {
+	DBSetup(t)
+	budget := app.GetBudgetById(1)
+	if err := app.EditBudget(1, 50, 50, 50); err != nil {
+		t.Error("Error occured while updating budget")
+	}
+	newBudget := app.GetBudgetById(1)
+	if *budget == *newBudget {
+		t.Error("Budget was not updated")
+	}
+}
+
+func TestEditNilBudget(t *testing.T) {
+	DBSetup(t)
+	if err := app.EditBudget(50, 50, 50, 50); err == nil {
+		t.Error("Expected error while editing nonexistent budget")
+	}
+}
+
 func TestVerify(t *testing.T) {
 	DBSetup(t)
 	if err := app.CreateUser("testemail@test.com", "testpass"); err != nil {
@@ -150,11 +169,6 @@ func TestLogin(t *testing.T) {
 	DBSetup(t)
 	app.CreateUser("testemail@test.com", "testpass")
 	err := app.Login("testemail@test.com", "testpass")
-	if err == nil {
-		t.Error("Expected error while login as unverified user")
-	}
-	app.VerifyUser("testemail@test.com")
-	err = app.Login("testemail@test.com", "testpass")
 	if err != nil {
 		t.Error("Unexpected error from login")
 	}

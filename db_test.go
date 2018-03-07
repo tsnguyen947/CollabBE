@@ -39,11 +39,11 @@ func DBTeardown() {
 func TestUserGet(t *testing.T) {
 	DBSetup(t)
 	for n := uint64(0); n < 10; n++ {
-		compare := app.User{Id: n, Username: fmt.Sprintf("user%v", n), Email: fmt.Sprintf("email%v@test.com", n), EncryptedPass: fmt.Sprintf("supersecretpass%v", n), LastAccess: time.Time{}, Verified: false}
+		expected := app.User{Id: n, Username: fmt.Sprintf("user%v", n), Email: fmt.Sprintf("email%v@test.com", n), EncryptedPass: fmt.Sprintf("supersecretpass%v", n), LastAccess: time.Time{}, Verified: false}
 		idUser := app.GetUserByID(n)
 		emailUser := app.GetUserByEmail(fmt.Sprintf("email%v@test.com", n))
 		usernameUser := app.GetUserByUsername(fmt.Sprintf("user%v", n))
-		if compare != *idUser || *idUser != *emailUser || *emailUser != *usernameUser {
+		if expected != *idUser || *idUser != *emailUser || *emailUser != *usernameUser {
 			t.Errorf("User does not match expected")
 		}
 	}
@@ -102,8 +102,8 @@ func TestUpdateUser(t *testing.T) {
 	rows, _ := app.DB.Query("SELECT * FROM users WHERE id=$1", n)
 	rows.Next()
 	rows.Scan(&user.Id, &user.Username, &user.Email, &user.EncryptedPass, &user.LastAccess, &user.Verified)
-	compare := app.User{Id: n, Username: fmt.Sprintf("user%v", n), Email: fmt.Sprintf("email%v@test.com", n), EncryptedPass: fmt.Sprintf("supersecretpass%v", n), LastAccess: time.Time{}, Verified: false}
-	if user != compare {
+	expected := app.User{Id: n, Username: fmt.Sprintf("user%v", n), Email: fmt.Sprintf("email%v@test.com", n), EncryptedPass: fmt.Sprintf("supersecretpass%v", n), LastAccess: time.Time{}, Verified: false}
+	if user != expected {
 		t.Errorf("Error in validating user before update")
 	}
 	rows = nil
@@ -111,8 +111,8 @@ func TestUpdateUser(t *testing.T) {
 	rows, _ = app.DB.Query("SELECT * FROM users WHERE id=$1", n)
 	rows.Next()
 	rows.Scan(&newUser.Id, &newUser.Username, &newUser.Email, &newUser.EncryptedPass, &newUser.LastAccess, &newUser.Verified)
-	compare = app.User{Id: n, Username: fmt.Sprintf("user%v", n+10), Email: fmt.Sprintf("email%v@test.com", n+10), EncryptedPass: fmt.Sprintf("supersecretpass%v", n+10), LastAccess: now, Verified: true}
-	if newUser != compare {
+	expected = app.User{Id: n, Username: fmt.Sprintf("user%v", n+10), Email: fmt.Sprintf("email%v@test.com", n+10), EncryptedPass: fmt.Sprintf("supersecretpass%v", n+10), LastAccess: now, Verified: true}
+	if newUser != expected {
 		t.Errorf("Error in validating user after update")
 	}
 }
@@ -124,9 +124,9 @@ func TestGetUserBudgets(t *testing.T) {
 		t.Errorf(fmt.Sprintf("Expected 5 budgets got %v", len(budgets)))
 	}
 	for n, budget := range budgets {
-		compare := app.Budget{Id: uint64(n), UserId: 0, Income: uint64(n), Rent: uint64(n), Wealth: uint64(n)}
-		if compare != *budget {
-			t.Errorf("Budget does not match expected: %v vs %v", budget, compare)
+		expected := app.Budget{Id: uint64(n), UserId: 0, Income: uint64(n), Rent: uint64(n), Wealth: uint64(n)}
+		if expected != *budget {
+			t.Errorf("Budget does not match expected: %v vs %v", budget, expected)
 		}
 	}
 }
@@ -146,6 +146,23 @@ func TestGetEmptyUserBudgets(t *testing.T) {
 	budgets := app.GetUserBudgets(5)
 	if len(budgets) != 0 {
 		t.Errorf("Expected empty budget list but got one with %v elements", len(budgets))
+	}
+}
+
+func TestGetBudgetById(t *testing.T) {
+	for n := uint64(0); n < 10; n++ {
+		expected := app.Budget{Id: n, UserId: n / 5, Income: n, Rent: n, Wealth: n}
+		budget := app.GetBudgetById(n)
+		if expected != *budget {
+			t.Errorf("User does not match expected")
+		}
+	}
+}
+
+func TestGetNilBudget(t *testing.T) {
+	DBSetup(t)
+	if budget := app.GetBudgetById(50); budget != nil {
+		t.Error("Expected error while getting nonexistent budget")
 	}
 }
 
@@ -171,4 +188,19 @@ func TestWriteBudgetNilUser(t *testing.T) {
 		}
 	}()
 	app.WriteBudget(50, 10000, 10000, 10000)
+}
+
+func TestBudgetUpdate(t *testing.T) {
+	DBSetup(t)
+	budget := app.GetBudgetById(1)
+	expected := app.Budget{Id: 1, UserId: 0, Income: 1, Rent: 1, Wealth: 1}
+	if *budget != expected {
+		t.Error("Error in validating budget before update")
+	}
+	app.UpdateBudget(1, 50, 50, 50)
+	budget = app.GetBudgetById(1)
+	expected = app.Budget{Id: 1, UserId: 0, Income: 50, Rent: 50, Wealth: 50}
+	if *budget != expected {
+		t.Error("Error in validating budget after update")
+	}
 }

@@ -97,6 +97,30 @@ func GetUserBudgets(userID uint64) []*Budget {
 	return budgets
 }
 
+func GetBudgetById(budgetId uint64) *Budget {
+	var rows *sql.Rows
+	var err error
+	if rows, err = DB.Query(fmt.Sprintf("SELECT * FROM budgets WHERE id=%v", budgetId)); err != nil {
+		panic(err)
+	}
+	budget := new(Budget)
+	exists := rows.Next()
+	if exists {
+		if err := rows.Scan(&budget.Id, &budget.UserId, &budget.Income, &budget.Rent, &budget.Wealth); err != nil {
+			panic(err)
+		}
+		return budget
+	} else {
+		return nil
+	}
+}
+
+func UpdateBudget(budgetId uint64, income uint64, rent uint64, wealth int64) {
+	if _, err := DB.Exec("UPDATE budgets SET income=$1, rent=$2, wealth=$3 WHERE id=$4", income, rent, wealth, budgetId); err != nil {
+		panic(err)
+	}
+}
+
 func WriteBudget(userID uint64, income uint64, rent uint64, wealth int64) {
 	if user := GetUserByID(userID); user == nil {
 		panic(errors.New("Attempted to create a budget for a nonexistent user"))

@@ -9,15 +9,14 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-func GetUser(userId int) (*string, error) {
-	user := GetUserByID(uint64(userId))
-	var obj []byte
-	var err error
-	if obj, err = json.Marshal(*user); err != nil {
+func GetUser(userId uint64) (*string, error) {
+	user := GetUserByID(userId)
+	if obj, err := json.Marshal(*user); err != nil {
 		return nil, err
+	} else {
+		result := string(obj[:])
+		return &result, nil
 	}
-	result := string(obj[:])
-	return &result, nil
 }
 
 func CreateUser(email string, password string) error {
@@ -77,6 +76,16 @@ func CreateBudget(userID uint64, income uint64, rent uint64, wealth int64) error
 	}
 }
 
+func EditBudget(budgetID uint64, income uint64, rent uint64, wealth int64) error {
+	budget := GetBudgetById(budgetID)
+	if budget != nil {
+		UpdateBudget(budgetID, income, rent, wealth)
+		return nil
+	} else {
+		return errors.New("Cannot create a budget for a nonexistent user")
+	}
+}
+
 func VerifyUser(email string) error {
 	user := GetUserByEmail(email)
 	if user != nil {
@@ -88,14 +97,13 @@ func VerifyUser(email string) error {
 }
 
 func Login(username string, password string) error {
-	user := GetUserByUsername(username)
-	var status error = nil
-	if user != nil && user.Verified {
-		if err := bcrypt.CompareHashAndPassword([]byte(user.EncryptedPass), []byte(password)); err != nil {
-			status = errors.New("Username or password is invalid")
-		}
-	} else {
-		status = errors.New("Username or password is invalid, or email is not verified")
+	var err error = nil
+	var user *User
+	if user = GetUserByUsername(username); user == nil {
+	} else if err = bcrypt.CompareHashAndPassword([]byte(user.EncryptedPass), []byte(password)); err != nil {
 	}
-	return status
+	if user == nil || err != nil {
+		err = errors.New("Username or password is invalid")
+	}
+	return err
 }

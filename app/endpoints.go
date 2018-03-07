@@ -10,6 +10,7 @@ import (
 )
 
 var baseURL = "/api/v1"
+var srv *http.Server = nil
 
 func checkErrors(w http.ResponseWriter, r *http.Request) {
 	if err := recover(); err != nil {
@@ -18,15 +19,20 @@ func checkErrors(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func enableCors(w *http.ResponseWriter) {
+	(*w).Header().Set("Access-Control-Allow-Origin", "*")
+}
+
 func UserHandler(w http.ResponseWriter, r *http.Request) {
+	enableCors(&w)
 	defer checkErrors(w, r)
+	var err error
+	var result *string
 	switch r.Method {
 	case "GET":
 		var d int
-		var err error
-		var result *string
 		if d, err = strconv.Atoi(r.URL.Path[13:]); err != nil {
-		} else if result, err = GetUser(d); err != nil {
+		} else if result, err = GetUser(uint64(d)); err != nil {
 		} else {
 			fmt.Println(w, result)
 		}
@@ -38,15 +44,18 @@ func UserHandler(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
 		var err error
 		var newUser struct {
-			email    string
-			password string
+			Email    string
+			Password string
 		}
 		if err = decoder.Decode(&newUser); err != nil {
-		} else if err = CreateUser(newUser.email, newUser.password); err != nil {
+		} else if err = CreateUser(newUser.Email, newUser.Password); err != nil {
+		} else if result, err = GetUser(GetUserByEmail(newUser.Email).Id); err != nil {
 		}
 		if err != nil {
 			http.Error(w, "Error in creating new user", http.StatusInternalServerError)
 			log.Print(err)
+		} else {
+			fmt.Fprint(w, *result)
 		}
 	case "PUT":
 		var err error
@@ -61,10 +70,13 @@ func UserHandler(w http.ResponseWriter, r *http.Request) {
 		decoder := json.NewDecoder(r.Body)
 		if err = decoder.Decode(&updatedUser); err != nil {
 		} else if err = EditUser(updatedUser.Id, updatedUser.Username, updatedUser.Email, updatedUser.OldPass, updatedUser.NewPass, updatedUser.Verified); err != nil {
+		} else if result, err = GetUser(updatedUser.Id); err != nil {
 		}
 		if err != nil {
 			http.Error(w, "Error in updating user info", http.StatusInternalServerError)
 			log.Print(err)
+		} else {
+			fmt.Fprint(w, *result)
 		}
 	default:
 		http.Error(w, fmt.Sprintf("%v is not allowed at this path", r.Method), http.StatusMethodNotAllowed)
@@ -72,11 +84,12 @@ func UserHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func BudgetHandler(w http.ResponseWriter, r *http.Request) {
+	enableCors(&w)
 	defer checkErrors(w, r)
+	var err error
 	switch r.Method {
 	case "GET":
 		var d int
-		var err error
 		var budgets []string
 		if d, err = strconv.Atoi(r.URL.Path[15:]); err != nil {
 		} else if budgets, err = GetBudgets(uint64(d)); err != nil {
@@ -97,11 +110,30 @@ func BudgetHandler(w http.ResponseWriter, r *http.Request) {
 			Wealth int64
 		}
 		decoder := json.NewDecoder(r.Body)
-		if err := decoder.Decode(&budget); err != nil {
+		if err = decoder.Decode(&budget); err != nil {
+		} else if err = CreateBudget(budget.UserId, budget.Income, budget.Rent, budget.Wealth); err != nil {
+		}
+		if err != nil {
 			log.Print(err)
 			http.Error(w, "Error in creating budget", http.StatusInternalServerError)
 		} else {
-			CreateBudget(budget.UserId, budget.Income, budget.Rent, budget.Wealth)
+			budgets := GetUserBudgets(budget.UserId)
+			fmt.Fprint(w, budgets[len(budgets)-1])
+		}
+	case "PUT":
+		var budget struct {
+			Id     uint64
+			Income uint64
+			Rent   uint64
+			Wealth int64
+		}
+		decoder := json.NewDecoder(r.Body)
+		if err = decoder.Decode(&budget); err != nil {
+		} else if err = EditBudget(budget.Id, budget.Income, budget.Rent, budget.Wealth); err != nil {
+		}
+		if err != nil {
+			log.Print(err)
+			http.Error(w, "Error in updating budget", http.StatusInternalServerError)
 		}
 	default:
 		http.Error(w, fmt.Sprintf("%v is not allowed at this path", r.Method), http.StatusMethodNotAllowed)
@@ -109,6 +141,7 @@ func BudgetHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
+	enableCors(&w)
 	defer checkErrors(w, r)
 	switch r.Method {
 	case "POST":
@@ -124,8 +157,10 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 			user := GetUserByUsername(cred.Username)
 			success := Login(cred.Username, cred.Password)
 			if success != nil {
-				http.Error(w, err.Error(), http.StatusUnauthorized)
+				http.Error(w, success.Error(), http.StatusUnauthorized)
 			} else {
+				result, _ := json.Marshal(user)
+				fmt.Fprint(w, string(result))
 				UpdateUser(user.Id, user.Username, user.Email, user.EncryptedPass, user.Verified, time.Now())
 			}
 		}
@@ -135,6 +170,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func VerifyUserHandler(w http.ResponseWriter, r *http.Request) {
+	enableCors(&w)
 	defer checkErrors(w, r)
 	switch r.Method {
 	case "GET":
@@ -148,13 +184,16 @@ func VerifyUserHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func StartServer() {
-	http.HandleFunc(baseURL+"/user/", UserHandler)
-	http.HandleFunc(baseURL+"/budget/", BudgetHandler)
-	http.HandleFunc(baseURL+"/verify/", VerifyUserHandler)
-	http.HandleFunc(baseURL+"/login/", LoginHandler)
-	err := http.ListenAndServe(":8080", nil)
-	if err != nil {
+func StartServer(port int) {
+	if srv == nil {
+		srv := &http.Server{Addr: fmt.Sprintf(":%v", port)}
+		http.HandleFunc(baseURL+"/user/", UserHandler)
+		http.HandleFunc(baseURL+"/budget/", BudgetHandler)
+		http.HandleFunc(baseURL+"/verify/", VerifyUserHandler)
+		http.HandleFunc(baseURL+"/login/", LoginHandler)
+		err := srv.ListenAndServe()
 		log.Print(err)
+	} else {
+		fmt.Println("Server already started")
 	}
 }
