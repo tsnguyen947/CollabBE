@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -33,12 +34,12 @@ func UserHandler(w http.ResponseWriter, r *http.Request) {
 		var d int
 		if d, err = strconv.Atoi(r.URL.Path[13:]); err != nil {
 		} else if result, err = GetUser(uint64(d)); err != nil {
-		} else {
-			fmt.Println(w, result)
 		}
 		if err != nil {
 			http.Error(w, "Error in getting user data", http.StatusInternalServerError)
 			log.Print(err)
+		} else {
+			fmt.Fprint(w, *result)
 		}
 	case "POST":
 		decoder := json.NewDecoder(r.Body)
@@ -98,9 +99,9 @@ func BudgetHandler(w http.ResponseWriter, r *http.Request) {
 			log.Print(err)
 			http.Error(w, "Error in getting budgets", http.StatusInternalServerError)
 		} else {
-			for _, str := range budgets {
-				fmt.Fprint(w, str)
-			}
+			fmt.Fprint(w, "[")
+			fmt.Fprint(w, strings.Join(budgets, ","))
+			fmt.Fprint(w, "]")
 		}
 	case "POST":
 		var budget struct {

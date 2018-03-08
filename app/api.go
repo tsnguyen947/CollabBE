@@ -29,9 +29,8 @@ func CreateUser(email string, password string) error {
 		}
 		WriteUser(email, string(hashedPassword))
 		return nil
-	} else {
-		return errors.New(fmt.Sprintf("User with email %s already exists", email))
 	}
+	return fmt.Errorf("User with email %s already exists", email)
 }
 
 func EditUser(id uint64, username string, email string, oldPass string, newPass string, verified bool) error {
